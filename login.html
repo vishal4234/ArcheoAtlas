@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Login</title>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+
+  <!-- Link to external JS file -->
+  <script src="./auth.js" defer></script>
+</head>
+
+<body>
+  <div class="login_wrapper">
+    <div class="login_form">
+      <h2>Login</h2>
+      <input type="email" name="email" id="email" placeholder="Enter Your Email" required />
+      <input type="password" name="password" id="password" placeholder="Enter Your Password" required />
+      <button id="loginButton" type="button">
+        <span class="login-text">Login</span>
+      </button>
+      <span><a href="./signup.html">I don't have an account</a></span>
+    </div>
+  </div>
+
+  <script>
+    // Function to get a cookie value
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+    // Call the checkSessionForLogin function when the script loads
+    document.addEventListener("DOMContentLoaded", function () {
+      document.getElementById('loginButton').addEventListener('click', login);
+    });
+  </script>
+</body>
+
+</html>

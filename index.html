@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>ArcheoAtlas</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.30/"></script>
+    <script type="module">
+
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc, doc, getDoc, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjDYy7kSmaI5pZv-Pr2OCQlMR64gY4Xwc",
+            authDomain: "atlas-ea17f.firebaseapp.com",
+            projectId: "atlas-ea17f",
+            storageBucket: "atlas-ea17f.appspot.com",
+            messagingSenderId: "522391815616",
+            appId: "1:522391815616:web:75b3f5f82a1e7ae4cfb425"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        const storage = getStorage(app);
+
+
+        let markers = [];
+
+        function getSessionId() {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; session_id=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        async function fetchUsername() {
+            const sessionId = getSessionId();
+            if (!sessionId) return null;
+
+            try {
+                const userDoc = doc(db, "users", sessionId);
+                const docSnap = await getDoc(userDoc);
+                return docSnap.exists() ? docSnap.data().name || docSnap.data().email : null;
+            } catch (error) {
+                console.error("Error fetching user data:", error);
+                return null;
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            const usernameElement = document.getElementById("username");
+            if (user) {
+                const username = await fetchUsername();
+                usernameElement.textContent = username || "Guest";
+            } else {
+                usernameElement.textContent = '';
+            }
+        });
+
+        require(["esri/Map", "esri/views/SceneView", "esri/Graphic", "esri/widgets/Search"],
+            (Map, SceneView, Graphic, Search) => {
+                const map = new Map({ basemap: "satellite", ground: "world-elevation" });
+                const view = new SceneView({ container: "viewDiv", map: map, scale: 50000000 });
+
+                const searchWidget = new Search({ view: view });
+                view.ui.add(searchWidget, { position: "top-right" });
+
+                async function fetchMarkers() {
+                    try {
+                        const markersCollection = collection(db, "markers");
+                        const markerSnapshot = await getDocs(markersCollection);
+                        markerSnapshot.forEach((doc) => {
+                            const markerData = doc.data();
+                            markers.push(markerData);
+                            addMarker(markerData, "📍");
+                        });
+                    } catch (error) {
+                        console.error("Error fetching markers:", error);
+                        displayError("Failed to fetch markers. Please try again later.");
+                    }
+                }
+
+                fetchMarkers();
+
+                view.on("click", (event) => {
+                    const { latitude, longitude } = event.mapPoint;
+                    const emojiContainer = document.getElementById("emojiContainer");
+                    emojiContainer.innerHTML = "📍";
+                    emojiContainer.style.display = "block";
+                    emojiContainer.style.left = `${event.screenPoint.x - 10}px`;
+                    emojiContainer.style.top = `${event.screenPoint.y + 40}px`;
+
+                    document.getElementById("latitudeInput").value = latitude.toFixed(5);
+                    document.getElementById("longitudeInput").value = longitude.toFixed(5);
+                });
+
+                document.getElementById("getCurrentLocation").onclick = () => {
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition((position) => {
+                            const { latitude, longitude } = position.coords;
+                            document.getElementById("latitudeInput").value = latitude.toFixed(5);
+                            document.getElementById("longitudeInput").value = longitude.toFixed(5);
+                            view.goTo({ target: [longitude, latitude], zoom: 14 });
+                        }, (error) => {
+                            displayError("Unable to retrieve location. Please enable location services.");
+                        });
+                    } else {
+                        displayError("Geolocation is not supported by this browser.");
+                    }
+                };
+                async function getGeneratedImageUrl(prompt) {
+                    const headers = new Headers();
+                    headers.append("Authorization", "Bearer vk-gp3OsUhDhySLLBUVEgqG2VKHVmL4VDKzfxMRwoxAxGr2ZD");
+                
+                    const formdata = new FormData();
+                    formdata.append("prompt", prompt);
+                    formdata.append("style_id", "29");
+                    formdata.append("high_res_results", "1");
+                
+                    const requestOptions = {
+                        method: 'POST',
+                        body: formdata,
+                        headers: headers,
+                    };
+                
+                    try {
+                        const response = await fetch("https://api.vyro.ai/v1/imagine/api/generations", requestOptions);
+                
+                        if (!response.ok) {
+                            const errorText = await response.text(); // Get error text from response
+                            throw new Error(`Network response was not ok: ${response.status} - ${errorText}`);
+                        }
+                
+                        const contentType = response.headers.get("Content-Type");
+                
+                        if (contentType && contentType.includes("application/json")) {
+                            const result = await response.json();
+                            if (result && result.image_url) {
+                                return result.image_url;
+                            } else {
+                                throw new Error("Image URL not found in the response.");
+                            }
+                        } else if (contentType && contentType.includes("image/png")) {
+                            const blob = await response.blob();
+                            const url = URL.createObjectURL(blob);
+                            return url;
+                        } else {
+                            throw new Error("Unexpected response type.");
+                        }
+                    } catch (error) {
+                        console.error('Error fetching generated image:', error);
+                        displayError(`Failed to generate image: ${error.message}`); // Show detailed error
+                        throw error; // Rethrow to maintain flow
+                    }
+                }
+                document.getElementById("addMarkerButton").onclick = async () => {
+                    const title = document.getElementById("titleInput").value.trim();
+                    const message = document.getElementById("messageInput").value.trim();
+                    const latitude = parseFloat(document.getElementById("latitudeInput").value);
+                    const longitude = parseFloat(document.getElementById("longitudeInput").value);
+                
+                    if (!title || !message) {
+                        displayError("Please fill in both the title and message fields.");
+                        return;
+                    }
+                
+                    if (!isNaN(latitude) && !isNaN(longitude)) {
+                        if (markers.some(marker => marker.lat === latitude && marker.lon === longitude)) {
+                            displayError("A marker already exists at this location.");
+                            return;
+                        }
+                
+                        const username = await fetchUsername();
+                        const fullMessage = username ? `${message} - added by ${username}` : message;
+                
+                        try {
+                            const imageUrl = await getGeneratedImageUrl(message); // Fetch the generated image URL
+                            console.log("Generated Image URL:", imageUrl); // Log the image URL
+                
+                            // Display the generated image
+                            const imageDisplay = document.createElement("img");
+                            imageDisplay.src = imageUrl;
+                            imageDisplay.alt = "Generated Image";
+                            imageDisplay.style.maxWidth = "200px"; // Limit the size
+                            imageDisplay.style.marginTop = "10px";
+                            document.getElementById("form-container").appendChild(imageDisplay); // Append below form
+                        } catch (error) {
+                            displayError("Failed to generate image."); // This should now include more info
+                            return; // Stop further execution if image generation fails
+                        }
+                
+                        const markerData = { lat: latitude, lon: longitude, title, message: fullMessage, createdAt: new Date().toLocaleString() };
+                
+                        markers.push(markerData);
+                        addMarker(markerData, "📍");
+                
+                        try {
+                            await addDoc(collection(db, "markers"), { ...markerData, createdAt: Timestamp.now() });
+                            alert("Marker added successfully!");
+                        } catch (error) {
+                            console.error("Error adding marker:", error);
+                            displayError("Failed to add marker. Please try again.");
+                        }
+                    } else {
+                        displayError("Please select a valid location.");
+                    }
+                };
+                
+                function addMarker({ lat, lon, title, message, createdAt }, icon) {
+                    const point = { type: "point", latitude: lat, longitude: lon };
+                    const markerSymbol = { type: "text", text: icon, color: "red", font: { size: 20, weight: "bold" } };
+                    const popupTemplate = { title, content: `${message}<br><br><strong>Created At:</strong> ${createdAt}` };
+
+                    const graphic = new Graphic({ geometry: point, symbol: markerSymbol, popupTemplate });
+                    view.graphics.add(graphic);
+                }
+
+                view.on("zoom", hideEmojiContainer);
+                view.on("extent-change", hideEmojiContainer);
+                view.on("drag", hideEmojiContainer);
+
+                function hideEmojiContainer() {
+                    document.getElementById("emojiContainer").style.display = "none";
+                }
+            });
+
+
+
+
+        function displayError(message) {
+            const errorContainer = document.getElementById("errorContainer");
+            errorContainer.textContent = message;
+            errorContainer.style.display = "block";
+            setTimeout(() => errorContainer.style.display = "none", 5000);
+        }
+    </script>
+</head>
+
+<body>
+    <div class="nav_bar">
+        <ul>
+            <li>ArcheoAtlas</li>
+            <span id="username"></span>
+            <li class="logout"><button onclick="logout()">Logout</button></li>
+        </ul>
+    </div>
+
+    <div id="viewDiv"></div>
+
+    <div id="form-container">
+        <label>Title:</label><input type="text" id="titleInput" placeholder="Enter title" /><br>
+        <label>Latitude:</label><input type="text" id="latitudeInput" placeholder="Latitude" /><br>
+        <label>Longitude:</label><input type="text" id="longitudeInput" placeholder="Longitude" /><br>
+        <label>Message:</label><input type="text" id="messageInput" placeholder="Enter message" /><br>
+        <button id="getCurrentLocation">Get Current Location</button><br><br>
+        <button id="addMarkerButton">Add Marker</button>
+        <div id="errorContainer" style="color: red; display: none;"></div>
+    </div>
+
+    <div id="emojiContainer" style="position: absolute; display: none; font-size: 24px;"></div>
+
+    <script>
+        async function logout() {
+           
+                window.location.href = '/public.html'; // Redirect after logging out
+          
+        }
+
+        // Additional JavaScript code can go here...
+    </script>
+</body>
+</html> 

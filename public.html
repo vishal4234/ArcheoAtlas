@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>ArcheoAtlas</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.30/"></script>
+
+    <!-- Firebase SDK as modules -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjDYy7kSmaI5pZv-Pr2OCQlMR64gY4Xwc",
+            authDomain: "atlas-ea17f.firebaseapp.com",
+            projectId: "atlas-ea17f",
+            storageBucket: "atlas-ea17f.appspot.com",
+            messagingSenderId: "522391815616",
+            appId: "1:522391815616:web:75b3f5f82a1e7ae4cfb425"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let markers = []; // Store markers in memory
+
+        require(["esri/Map", "esri/views/SceneView", "esri/Graphic", "esri/widgets/Search"],
+            (Map, SceneView, Graphic, Search) => {
+                const map = new Map({
+                    basemap: "satellite",
+                    ground: "world-elevation"
+                });
+
+                const view = new SceneView({
+                    scale: 50000000,
+                    container: "viewDiv",
+                    map: map
+                });
+
+                const searchWidget = new Search({ view: view });
+                view.ui.add(searchWidget, { position: "top-right" });
+
+                // Fetch markers from Firestore on load
+                async function fetchMarkers() {
+                    try {
+                        const markersCollection = collection(db, "markers");
+                        const markerSnapshot = await getDocs(markersCollection);
+                        markerSnapshot.forEach((doc) => {
+                            const markerData = doc.data();
+                            markers.push(markerData);
+                            addMarker(markerData, "📍");
+                        });
+                    } catch (error) {
+                        console.error("Error fetching markers: ", error);
+                        alert("Error fetching markers. Please try again later.");
+                    }
+                }
+
+                fetchMarkers();
+
+                // Function to add a marker with a pin icon or emoji
+                function addMarker({ lat, lon, title, message }, icon) {
+                    const point = { type: "point", latitude: lat, longitude: lon };
+                    const markerSymbol = {
+                        type: "text",
+                        text: icon,
+                        color: "red",
+                        font: { size: 20, weight: "bold" }
+                    };
+                    const popupTemplate = {
+                        title: title,
+                        content: message
+                    };
+
+                    const pointGraphic = new Graphic({
+                        geometry: point,
+                        symbol: markerSymbol,
+                        popupTemplate: popupTemplate
+                    });
+
+                    view.graphics.add(pointGraphic);
+                }
+
+                // Optional: Fetch and center the map on the user's location
+                function getUserLocation() {
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                const userPoint = {
+                                    type: "point",
+                                    longitude: position.coords.longitude,
+                                    latitude: position.coords.latitude
+                                };
+                                view.goTo(userPoint);
+                                addMarker({
+                                    lat: position.coords.latitude,
+                                    lon: position.coords.longitude,
+                                    title: "You are here",
+                                    message: "This is your current location."
+                                }, "🏠");
+                            },
+                            (error) => {
+                                console.error("Error getting user location: ", error);
+                                alert("Unable to retrieve your location.");
+                            }
+                        );
+                    } else {
+                        alert("Geolocation is not supported by this browser.");
+                    }
+                }
+
+                // Uncomment to get the user's location when the map loads
+                // getUserLocation();
+            });
+
+// Functionality for Login
+function login() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+  
+    firebase.auth().signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            alert('Login successful!');
+            setCookie('session_id', userCredential.user.uid, 7);
+            return db.collection('users').doc(userCredential.user.uid).get();
+        })
+        .then((doc) => {
+            if (doc.exists) {
+                console.log('User data:', doc.data());
+            }
+            window.location.href = './index.html'; // Redirect after login
+        })
+        .catch((error) => {
+            alert('Error: ' + error.message); // Capture the error message
+        });
+  }
+  
+  function generateSessionId() {
+    return 'session-' + Math.random().toString(36).substr(2, 9);
+  }
+
+
+  
+    </script>
+</head>
+
+<body>
+
+    <div class="nav_bar">
+        <ul>
+            <li>ArcheoAtlas</li>
+            <a href="./login.html"> <li class="login"><Button>Login or Signup</Button></li></a>
+        </ul>
+    </div>
+    <div id="viewDiv" style="height: 100vh;"></div> <!-- Ensure the map takes the full height -->
+</body>
+
+</html>

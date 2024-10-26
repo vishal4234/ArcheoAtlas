@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Signup</title>
+
+  <!-- Firebase SDKs (Version 8) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+  <!-- Link to external JS file -->
+  <script src="./auth.js" defer></script>
+</head>
+
+<body>
+  <div class="login_wrapper">
+    <div class="login_form">
+      <span class="span">
+        <h2>Signup</h2>
+      </span>
+      <input type="text" name="name" id="name" placeholder="Enter Your Name" required />
+      <input type="email" name="email" id="email" placeholder="Enter Your Email" required />
+      <input type="password" name="password" id="password" placeholder="Enter your Password" required />
+      <input type="password" name="confirm_password" id="confirm_password" placeholder="Confirm your Password" required />
+      <button id="signupButton">Signup</button>
+      <span><a href="./login.html">I have an account</a></span>
+    </div>
+  </div>
+
+  <!-- Add event listener for signup button after the DOM is loaded -->
+  <script>
+
+
+    document.addEventListener("DOMContentLoaded", function () {
+      document.getElementById('signupButton').addEventListener('click', signup);
+    });
+  </script>
+</body>
+
+</html>
